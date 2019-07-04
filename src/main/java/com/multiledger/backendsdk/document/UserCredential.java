@@ -1,51 +1,28 @@
 package com.multiledger.backendsdk.document;
 
-import org.hyperledger.fabric.sdk.Enrollment;
-import org.hyperledger.fabric.sdk.User;
+
 import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.Transient;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.util.Set;
 
 @Document
-public class UserCredential implements User {
+public class UserCredential  {
 
     @Id
-    private String id;
+    private Integer id;
 
 
+    private String key;
+    private String cert;
     private String name;
-    private String password;
-    @Transient
-    private Set<String> roles;
-    @Transient
-    private String account;
-    private String affiliation;
-    @Transient
-    private String mspId;
 
-    private Enrollment enrollment;
-
-
-    public String getMspId() {
-        return mspId;
+    public UserCredential(Integer id, String name, String key, String cert) {
+        this.id = id;
+        this.key = key;
+        this.cert = cert;
+        this.name = name;
     }
 
-    public void setMspid(String mspId) {
-        this.mspId = mspId;
-    }
-
-    @Override
-    public Enrollment getEnrollment() {
-        return enrollment;
-    }
-
-    public void setEnrollment(Enrollment enrollment) {
-        this.enrollment = enrollment;
-    }
-
-    @Override
     public String getName() {
         return name;
     }
@@ -54,38 +31,27 @@ public class UserCredential implements User {
         this.name = name;
     }
 
-    public String getPassword() {
-        return password;
+    public Integer getId() {
+        return id;
     }
 
-    public void setPassword(String password) {
-        this.password = password;
+    public void setId(Integer id) {
+        this.id = id;
     }
 
-    @Override
-    public Set<String> getRoles() {
-        return roles;
+    public String getKey() {
+        return key;
     }
 
-    public void setRoles(Set<String> roles) {
-        this.roles = roles;
+    public void setKey(String key) {
+        this.key = key;
     }
 
-    @Override
-    public String getAccount() {
-        return account;
+    public String getCert() {
+        return cert;
     }
 
-    public void setAccount(String account) {
-        this.account = account;
-    }
-
-    @Override
-    public String getAffiliation() {
-        return affiliation;
-    }
-
-    public void setAffiliation(String affiliation) {
-        this.affiliation = affiliation;
+    public void setCert(String cert) {
+        this.cert = cert;
     }
 }

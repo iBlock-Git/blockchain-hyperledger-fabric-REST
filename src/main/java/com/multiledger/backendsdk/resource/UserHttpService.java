@@ -4,11 +4,12 @@ package com.multiledger.backendsdk.resource;
 import com.multiledger.backendsdk.network.LoadConnectionProfile;
 import com.multiledger.backendsdk.document.UserCredential;
 
-import com.multiledger.backendsdk.network.ReadFile;
 import com.multiledger.backendsdk.repository.UserRepository;
-import io.swagger.annotations.Api;
 
 
+import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
+import org.hyperledger.fabric.sdk.NetworkConfig;
+import org.hyperledger.fabric_ca.sdk.HFCAInfo;
 import org.slf4j.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,47 +18,29 @@ import org.springframework.web.bind.annotation.*;
 
 import org.hyperledger.fabric.sdk.Enrollment;
 import org.hyperledger.fabric_ca.sdk.HFCAClient;
-import org.hyperledger.fabric.sdk.NetworkConfig;
 
 
+import java.io.IOException;
+import java.io.StringWriter;
+import java.security.PrivateKey;
 import java.util.*;
+import java.io.File;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 
 public class UserHttpService {
 
     private static final Logger logger = LoggerFactory.getLogger(UserHttpService.class);
     private static final Integer lock = 0;
+    private HFCAClient hfcaClient1 = null;
     private HFCAClient hfcaClient = null;
-    private static NetworkConfig networkConfig;
 
+    private static NetworkConfig networkConfig = null;
 
     UserRepository userRepository;
-
-    UserCredential userCredential = new UserCredential();
-
-    LinkedHashMap<String, UserCredential> userStore = new LinkedHashMap<>();
-
-    HFCAClient getHfcaClient(String org) {
-        try {
-            this.hfcaClient = HFCAClient.createNewInstance(LoadConnectionProfile.getCaInfo(org));
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return hfcaClient;
-    }
-
-
-
-
-    /**
-     * 1. Enroll admin given username and secret (registrar). Read from yaml file
-     * 2. Register user given username, affiliation, organization
-     * 3. Enroll user given username and admin registrar
-     *
-     *
-     *
-      */
-
+    HashMap<String, UserCredential> userStore = new HashMap<>();
 
 
 
@@ -69,28 +52,38 @@ public class UserHttpService {
     @PostMapping(path = "/enrollAdmin", consumes = "application/json", produces = "application/json")
     public ResponseEntity enrollAdmin(@RequestBody UserCredential ucr) throws Exception {
 
-        userCredential.setName(ucr.getName());
-        userCredential.setPassword(ucr.getPassword());
-        userCredential.setAffiliation(ucr.getAffiliation());
 
-        if (userStore.containsKey(userCredential.getAffiliation())) {
-            // username already exist
-            logger.info("Admin is already enrolled. Therefore skipping...admin enrollment");
-            return new ResponseEntity("Admin is already enrolled.", HttpStatus.ALREADY_REPORTED);
-        } else {
-            userStore.put(userCredential.getAffiliation(), userCredential);
-        }
+        File yamlConnectionFile = LoadConnectionProfile.getInstance().getTestNetworkConfigFileYAML();
+        networkConfig = NetworkConfig.fromYamlFile(yamlConnectionFile);
 
-        //HFCA Client makes an enrol request to ca server.
-        HFCAClient hfcaClient = getHfcaClient(userCredential.getAffiliation());
-        Enrollment enrollment = hfcaClient.enroll(userCredential.getName(), userCredential.getPassword());
-        userCredential.setEnrollment(enrollment);
-        userRepository.save(userCredential);
+        NetworkConfig.OrgInfo org = networkConfig.getOrganizationInfo("Org1");
+        NetworkConfig.CAInfo caInfo = org.getCertificateAuthorities().get(0);
+
+        hfcaClient = HFCAClient.createNewInstance(caInfo);
+
+        //assertEquals(hfcaClient.getCAName(), caInfo.getCAName());
+        //HFCAInfo info = hfcaClient.info(); //makes actual REST call.
+        //assertEquals(caInfo.getCAName(), info.getCAName());
+
+        Collection<NetworkConfig.UserInfo> registrars = caInfo.getRegistrars();
+        // assertTrue(!registrars.isEmpty());
+
+
+        NetworkConfig.UserInfo registrar = registrars.iterator().next();
+        String admin = registrar.getName();
+        registrar.setEnrollment(hfcaClient.enroll(admin, registrar.getEnrollSecret()));
+        final String tlsKeyPEM = getPEMStringFromPrivateKey(registrar.getEnrollment().getKey());
+        final String tlsCertPEM = registrar.getEnrollment().getCert();
+
+
+        userRepository.save(new UserCredential(1, admin, tlsKeyPEM, tlsCertPEM));
+
 
         logger.info("Admin enrolled successfully");
-        return new ResponseEntity("Admin enrolled successflly", HttpStatus.CREATED);
+        return new ResponseEntity(admin + " as network administartor enrolled successflly", HttpStatus.CREATED);
 
     }
+
 
 
     /**
@@ -103,31 +96,47 @@ public class UserHttpService {
      * @throws Exception
      */
 
-    @PostMapping(path= "/registerUser", consumes = "application/json", produces = "application/json")
-    public ResponseEntity registerUser(@RequestBody UserCredential ucr) throws Exception {
+//    @PostMapping(path= "/registerUser", consumes = "application/json", produces = "application/json")
+//    public ResponseEntity registerUser(@RequestBody UserCredential ucr) throws Exception {
+//
+//        userCredential.setName(ucr.getName());
+//
+//
+//        JSONObject response = new JSONObject();
+//        System.out.println("Input: " + request);
+//        try {
+//            CAUtility.enrollUser(request.getUserName(),
+//                    request.getEnrollmentSecret(), request.getUserOrg());
+//        } catch (EnrollmentException e) {
+//            // TODO Auto-generated catch block
+//            e.printStackTrace();
+//            response.put("message", e.getMessage());
+//            return Response.status(500).entity(response).build();
+//        } catch (InvalidArgumentException e) {
+//            // TODO Auto-generated catch block
+//            e.printStackTrace();
+//            response.put("message", e.getMessage());
+//            return Response.status(500).entity(response).build();
+//        }
+//        response.put("message", "Enrolled Successfully");
+//        return Response.status(201).entity(response).build();
+//
+//    }
 
-        userCredential.setName(ucr.getName());
 
 
-        JSONObject response = new JSONObject();
-        System.out.println("Input: " + request);
-        try {
-            CAUtility.enrollUser(request.getUserName(),
-                    request.getEnrollmentSecret(), request.getUserOrg());
-        } catch (EnrollmentException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-            response.put("message", e.getMessage());
-            return Response.status(500).entity(response).build();
-        } catch (InvalidArgumentException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-            response.put("message", e.getMessage());
-            return Response.status(500).entity(response).build();
-        }
-        response.put("message", "Enrolled Successfully");
-        return Response.status(201).entity(response).build();
 
+
+
+    // Convert PrivateKey to String
+    static String getPEMStringFromPrivateKey(PrivateKey privateKey) throws IOException {
+        StringWriter pemStrWriter = new StringWriter();
+        JcaPEMWriter pemWriter = new JcaPEMWriter(pemStrWriter);
+
+        pemWriter.writeObject(privateKey);
+
+        pemWriter.close();
+
+        return pemStrWriter.toString();
     }
-
 }
