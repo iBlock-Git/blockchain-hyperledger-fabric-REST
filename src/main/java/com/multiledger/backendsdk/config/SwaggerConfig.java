@@ -33,10 +33,10 @@ public class SwaggerConfig {
     private ApiInfo metaInfo() {
         return new ApiInfo(
                 "Hyperledger Fabric Backend REST API",
-                "fabeic backend API for multiledger inc.",
+                "fabric backend API for multiledger",
                 "1.0",
                 "Terms of service",
-                new Contact("Multiledger Inc.", "www.multiledger.io", "xxx@multiledger.io"),
+                new Contact("Multiledger", "www.multiledger.io", "xxx@multiledger.io"),
                 "Apache License Version 2.0",
                 "https://www.apache.org/licensen.html", Collections.emptyList());
     }

@@ -12,7 +12,11 @@ public class LoadConnectionProfile {
 
     private static final Integer lock = 0;
     private static LoadConnectionProfile loadConnectionProfile = null;
-    private static NetworkConfig config;
+
+    private static final ReadFile fileConfig = ReadFile.getReadFileObject();
+    private static NetworkConfig networkConfig = null;
+
+
 
     /**
      * Constructor
@@ -21,9 +25,10 @@ public class LoadConnectionProfile {
      */
     private LoadConnectionProfile() throws Exception {
 
-        config = NetworkConfig.fromJsonFile(new File("/Users/Swikar/Desktop/iBlock/backend-sdk/src/main/resources/network-config.json"));
-
+        networkConfig = NetworkConfig.fromYamlFile(fileConfig.getTestNetworkConfigFileYAML());
     }
+
+
 
     /**
      * Get Certificate Authority config for an organization
@@ -33,11 +38,11 @@ public class LoadConnectionProfile {
      * @throws Exception
      */
     public static NetworkConfig.CAInfo getCaInfo(String org) throws Exception {
-        if (config == null) {
+        if (networkConfig == null) {
             getInstance();
         }
         //assuming there is only one ca per organisation
-        return config.getOrganizationInfo(org).getCertificateAuthorities().get(0);
+        return networkConfig.getOrganizationInfo(org).getCertificateAuthorities().get(0);
     }
 
     /**
@@ -48,10 +53,10 @@ public class LoadConnectionProfile {
      * @throws Exception
      */
     public static NetworkConfig.OrgInfo getOrgInfo(String org) throws Exception {
-        if (config == null) {
+        if (networkConfig == null) {
             getInstance();
         }
-        return config.getOrganizationInfo(org);
+        return networkConfig.getOrganizationInfo(org);
     }
 
     /**
@@ -77,10 +82,10 @@ public class LoadConnectionProfile {
      * @throws Exception
      */
     public static NetworkConfig getConfig() throws Exception {
-        if (config == null) {
+        if (networkConfig == null) {
             getInstance();
         }
-        return config;
+        return networkConfig;
     }
 }
 

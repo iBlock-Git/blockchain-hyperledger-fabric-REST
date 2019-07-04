@@ -1,35 +1,41 @@
 package com.multiledger.backendsdk.resource;
 
 
-import com.multiledger.backendsdk.document.UserContext;
 import com.multiledger.backendsdk.network.LoadConnectionProfile;
+import com.multiledger.backendsdk.document.UserCredential;
 
+import com.multiledger.backendsdk.network.ReadFile;
 import com.multiledger.backendsdk.repository.UserRepository;
 import io.swagger.annotations.Api;
+
+
+import org.slf4j.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import org.json.simple.JSONObject;
-import javax.ws.rs.core.Response;
 
 import org.hyperledger.fabric.sdk.Enrollment;
 import org.hyperledger.fabric_ca.sdk.HFCAClient;
+import org.hyperledger.fabric.sdk.NetworkConfig;
+
 
 import java.util.*;
 
-@RestController
-@RequestMapping(path = "/fabric/userservice")
-@Api(value = "User Resource REST Endpoint", description = "Shows the user info")
+
 public class UserHttpService {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserHttpService.class);
     private static final Integer lock = 0;
-    private HFCAClient hfcaClient=null;
+    private HFCAClient hfcaClient = null;
+    private static NetworkConfig networkConfig;
+
+
     UserRepository userRepository;
 
-    LinkedHashMap<String, UserContext> userStore = new LinkedHashMap<>();
+    UserCredential userCredential = new UserCredential();
+
+    LinkedHashMap<String, UserCredential> userStore = new LinkedHashMap<>();
 
     HFCAClient getHfcaClient(String org) {
         try {
@@ -41,35 +47,51 @@ public class UserHttpService {
     }
 
 
+
+
+    /**
+     * 1. Enroll admin given username and secret (registrar). Read from yaml file
+     * 2. Register user given username, affiliation, organization
+     * 3. Enroll user given username and admin registrar
+     *
+     *
+     *
+      */
+
+
+
+
     /**
      * Enroll the admin. This admin will be used as a registrar to register other users.
      *
-     * @param name   - admin name
-     * @param secret - admin secret
-     * @return adminContext
      * @throws Exception
      */
-    @PostMapping(path= "/enrollAdmin", consumes = "application/json", produces = "application/json")
-    public ResponseEntity enrollAdmin(String name, String secret) throws Exception  {
+    @PostMapping(path = "/enrollAdmin", consumes = "application/json", produces = "application/json")
+    public ResponseEntity enrollAdmin(@RequestBody UserCredential ucr) throws Exception {
 
-       // System.out.println("Input" + request);
+        userCredential.setName(ucr.getName());
+        userCredential.setPassword(ucr.getPassword());
+        userCredential.setAffiliation(ucr.getAffiliation());
 
-        JSONObject response = new JSONObject();
-
+        if (userStore.containsKey(userCredential.getAffiliation())) {
+            // username already exist
+            logger.info("Admin is already enrolled. Therefore skipping...admin enrollment");
+            return new ResponseEntity("Admin is already enrolled.", HttpStatus.ALREADY_REPORTED);
+        } else {
+            userStore.put(userCredential.getAffiliation(), userCredential);
+        }
 
         //HFCA Client makes an enrol request to ca server.
-        HFCAClient hfcaClient = getHfcaClient("Org1");
-        Enrollment enrollment = hfcaClient.enroll(name, secret);
+        HFCAClient hfcaClient = getHfcaClient(userCredential.getAffiliation());
+        Enrollment enrollment = hfcaClient.enroll(userCredential.getName(), userCredential.getPassword());
+        userCredential.setEnrollment(enrollment);
+        userRepository.save(userCredential);
 
-        userStore.put("Org1", new UserContext(name,LoadConnectionProfile.getOrgInfo("Org1").getName(),
-                LoadConnectionProfile.getOrgInfo("Org1").getMspId()));
+        logger.info("Admin enrolled successfully");
+        return new ResponseEntity("Admin enrolled successflly", HttpStatus.CREATED);
 
-
-        userRepository.save(new UserContext(enrollment));
-
-
-        return new ResponseEntity(name + " enrolled successfully", HttpStatus.OK);
     }
+
 
     /**
      * Register and enroll the user with organization MSP provider. User context saved in  /cred directory.
@@ -81,28 +103,31 @@ public class UserHttpService {
      * @throws Exception
      */
 
-//    @PostMapping(path= "/registerUser", consumes = "application/json", produces = "application/json")
-//    public Response registerUser(EnrollRequestData request) {
-//
-//        JSONObject response = new JSONObject();
-//        System.out.println("Input: " + request);
-//        try {
-//            CAUtility.enrollUser(request.getUserName(),
-//                    request.getEnrollmentSecret(), request.getUserOrg());
-//        } catch (EnrollmentException e) {
-//            // TODO Auto-generated catch block
-//            e.printStackTrace();
-//            response.put("message", e.getMessage());
-//            return Response.status(500).entity(response).build();
-//        } catch (InvalidArgumentException e) {
-//            // TODO Auto-generated catch block
-//            e.printStackTrace();
-//            response.put("message", e.getMessage());
-//            return Response.status(500).entity(response).build();
-//        }
-//        response.put("message", "Enrolled Successfully");
-//        return Response.status(201).entity(response).build();
-//
-//    }
+    @PostMapping(path= "/registerUser", consumes = "application/json", produces = "application/json")
+    public ResponseEntity registerUser(@RequestBody UserCredential ucr) throws Exception {
+
+        userCredential.setName(ucr.getName());
+
+
+        JSONObject response = new JSONObject();
+        System.out.println("Input: " + request);
+        try {
+            CAUtility.enrollUser(request.getUserName(),
+                    request.getEnrollmentSecret(), request.getUserOrg());
+        } catch (EnrollmentException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            response.put("message", e.getMessage());
+            return Response.status(500).entity(response).build();
+        } catch (InvalidArgumentException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            response.put("message", e.getMessage());
+            return Response.status(500).entity(response).build();
+        }
+        response.put("message", "Enrolled Successfully");
+        return Response.status(201).entity(response).build();
+
+    }
 
 }
